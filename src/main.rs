@@ -77,6 +77,15 @@ impl SlabAllocator {
         }
     }
 
+    /// Free an object, returning it to the free list.
+    pub fn free(&mut self, ptr: NonNull<u8>) {
+        unsafe {
+            let free_obj = ptr.as_ptr() as *mut FreeObject;
+            (*free_obj).next = self.free_list;
+            self.free_list = free_obj;
+        }
+    }
+
     unsafe fn allocate_page(&mut self) -> Option<()> {
         // Check if we have space for another page
         if PAGE_POOL_USED + PAGE_SIZE > MAX_PAGES * PAGE_SIZE {
