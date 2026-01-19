@@ -102,25 +102,39 @@ impl SlabAllocator {
 
     unsafe fn allocate_page(&mut self) -> Option<()> {
         // Check if we have space for another page
-        if PAGE_POOL_USED + PAGE_SIZE > MAX_PAGES * PAGE_SIZE {
-            return None;
+        unsafe {
+            if PAGE_POOL_USED + PAGE_SIZE > MAX_PAGES * PAGE_SIZE {
+                return None;
+            }
         }
 
         // Get the next page from the pool
         let pool_start = addr_of_mut!(PAGE_POOL) as *mut u8;
-        let page_ptr = pool_start.add(PAGE_POOL_USED) as *mut Page;
-        PAGE_POOL_USED += PAGE_SIZE;
+        let page_ptr = unsafe {
+            pool_start.add(PAGE_POOL_USED)
+        } as *mut Page;
+        unsafe {
+            PAGE_POOL_USED += PAGE_SIZE;
+        }
 
         // Write the page header
-        ptr::write(page_ptr, Page {
-            next: self.pages,
-        });
+        unsafe {
+            ptr::write(page_ptr, Page {
+                next: self.pages,
+            });
+        }
 
         // The data area starts after the header
-        let data_start = (page_ptr as *mut u8).add(core::mem::size_of::<PageHeader>());
+        let data_start = unsafe {
+            (page_ptr as *mut u8).add(core::mem::size_of::<PageHeader>())
+        };
         for i in 0..self.objects_per_page {
-            let obj_ptr = data_start.add(i * self.object_size) as *mut FreeObject;
-            (*obj_ptr).next = self.free_list;
+            let obj_ptr = unsafe {
+                data_start.add(i * self.object_size)
+            } as *mut FreeObject;
+            unsafe {
+                (*obj_ptr).next = self.free_list;
+            }
             self.free_list = obj_ptr;
         }
 
@@ -132,7 +146,7 @@ impl SlabAllocator {
 // SAFETY: This function is required by the C runtime ABI.
 // It is not meant to be called directly; it exists only so the linker can resolve the symbol.
 #[cfg(not(test))]
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn __libc_start_main() {
     main();
 }
@@ -140,14 +154,14 @@ pub extern "C" fn __libc_start_main() {
 // SAFETY: This function is required by the C runtime ABI.
 // It is not meant to be called directly; it exists only so the linker can resolve the symbol.
 #[cfg(not(test))]
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn abort() {
     exit(1);
 }
 
 // SAFETY: This is the program entry point in a no_std environment.
 // It is marked `no_mangle` so the linker can find it.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn main() {
     let mut slab = SlabAllocator::new(64);
 
@@ -177,5 +191,5 @@ fn panic(_info: &PanicInfo) -> ! {
 // SAFETY: This symbol is required by the Rust compiler for exception handling in a no_std environment.
 // It can be left empty.
 #[cfg(not(test))]
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn rust_eh_personality() {}
