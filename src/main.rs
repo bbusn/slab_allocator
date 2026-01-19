@@ -11,6 +11,28 @@ use core::panic::PanicInfo;
 
 use crate::sys::exit;
 
+// Slab allocator struct.
+pub struct SlabAllocator {
+    object_size: usize,
+    objects_per_page: usize,
+    free_list: *mut FreeObject,
+    pages: *mut Page,
+}
+
+/// Free list node stored inside free objects
+struct FreeObject {
+    next: *mut FreeObject,
+}
+
+// Page header with a pointer to the next page
+#[repr(C)]
+struct PageHeader {
+    next: *mut PageHeader,
+}
+
+// A page is a header followed by the actual data
+type Page = PageHeader;
+
 // SAFETY: This function is required by the C runtime ABI.
 // It is not meant to be called directly; it exists only so the linker can resolve the symbol.
 #[cfg(not(test))]
