@@ -202,3 +202,56 @@ fn panic(_info: &PanicInfo) -> ! {
 #[cfg(not(test))]
 #[unsafe(no_mangle)]
 pub extern "C" fn rust_eh_personality() {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn reset_state() {
+        SlabAllocator::reset_pool();
+    }
+
+    #[test]
+    fn test_basic_allocation() {
+        reset_state();
+        let mut slab = SlabAllocator::new(64);
+        
+        let ptr = slab.alloc();
+        assert!(ptr.is_some(), "Allocation should succeed");
+    }
+
+    #[test]
+    fn test_multiple_allocations() {
+        reset_state();
+        let mut slab = SlabAllocator::new(64);
+        
+        let ptr1 = slab.alloc();
+        let ptr2 = slab.alloc();
+        let ptr3 = slab.alloc();
+        
+        assert!(ptr1.is_some());
+        assert!(ptr2.is_some());
+        assert!(ptr3.is_some());
+        
+        // All pointers should be different
+        assert_ne!(ptr1.unwrap().as_ptr(), ptr2.unwrap().as_ptr());
+        assert_ne!(ptr2.unwrap().as_ptr(), ptr3.unwrap().as_ptr());
+        assert_ne!(ptr1.unwrap().as_ptr(), ptr3.unwrap().as_ptr());
+    }
+
+    #[test]
+    fn test_free_and_reuse() {
+        reset_state();
+        let mut slab = SlabAllocator::new(64);
+        
+        let ptr1 = slab.alloc().unwrap();
+        let addr1 = ptr1.as_ptr() as usize;
+        slab.free(ptr1);
+        
+        let ptr2 = slab.alloc().unwrap();
+        let addr2 = ptr2.as_ptr() as usize;
+        
+        // Freed memory should be reused
+        assert_eq!(addr1, addr2, "Freed memory should be reused");
+    }
+}
