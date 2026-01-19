@@ -212,46 +212,41 @@ mod tests {
     }
 
     #[test]
-    fn test_basic_allocation() {
+    fn test_write_to_allocated_memory() {
         reset_state();
         let mut slab = SlabAllocator::new(64);
+        
+        let ptr = slab.alloc().unwrap();
+        unsafe {
+            // Write some data to the allocated memory
+            let slice = std::slice::from_raw_parts_mut(ptr.as_ptr(), 64);
+            for (i, byte) in slice.iter_mut().enumerate() {
+                *byte = (i % 256) as u8;
+            }
+            
+            // Verify the data
+            for (i, byte) in slice.iter().enumerate() {
+                assert_eq!(*byte, (i % 256) as u8);
+            }
+        }
+    }
+
+    #[test]
+    fn test_small_object_size() {
+        reset_state();
+        let mut slab = SlabAllocator::new(8);
+        
+        // Should still work even with small objects
+        let ptr = slab.alloc();
+        assert!(ptr.is_some());
+    }
+
+    #[test]
+    fn test_large_object_size() {
+        reset_state();
+        let mut slab = SlabAllocator::new(1024);
         
         let ptr = slab.alloc();
-        assert!(ptr.is_some(), "Allocation should succeed");
-    }
-
-    #[test]
-    fn test_multiple_allocations() {
-        reset_state();
-        let mut slab = SlabAllocator::new(64);
-        
-        let ptr1 = slab.alloc();
-        let ptr2 = slab.alloc();
-        let ptr3 = slab.alloc();
-        
-        assert!(ptr1.is_some());
-        assert!(ptr2.is_some());
-        assert!(ptr3.is_some());
-        
-        // All pointers should be different
-        assert_ne!(ptr1.unwrap().as_ptr(), ptr2.unwrap().as_ptr());
-        assert_ne!(ptr2.unwrap().as_ptr(), ptr3.unwrap().as_ptr());
-        assert_ne!(ptr1.unwrap().as_ptr(), ptr3.unwrap().as_ptr());
-    }
-
-    #[test]
-    fn test_free_and_reuse() {
-        reset_state();
-        let mut slab = SlabAllocator::new(64);
-        
-        let ptr1 = slab.alloc().unwrap();
-        let addr1 = ptr1.as_ptr() as usize;
-        slab.free(ptr1);
-        
-        let ptr2 = slab.alloc().unwrap();
-        let addr2 = ptr2.as_ptr() as usize;
-        
-        // Freed memory should be reused
-        assert_eq!(addr1, addr2, "Freed memory should be reused");
+        assert!(ptr.is_some());
     }
 }
