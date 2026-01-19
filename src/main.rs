@@ -80,6 +80,16 @@ impl SlabAllocator {
     /// Free an object, returning it to the free list.
     pub fn free(&mut self, ptr: NonNull<u8>) {
         unsafe {
+            let pool_start = addr_of_mut!(PAGE_POOL) as *const u8 as usize;
+            let pool_end = pool_start + MAX_PAGES * PAGE_SIZE;
+
+            let ptr_addr = ptr.as_ptr() as usize;
+
+            // If pointer is outside the pool, ignore
+            if ptr_addr < pool_start || ptr_addr >= pool_end {
+                return;
+            }
+
             let free_obj = ptr.as_ptr() as *mut FreeObject;
             (*free_obj).next = self.free_list;
             self.free_list = free_obj;
