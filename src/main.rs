@@ -10,6 +10,16 @@ extern crate std;
 use core::panic::PanicInfo;
 
 use crate::sys::exit;
+use core::ptr;
+
+const PAGE_SIZE: usize = 4096;
+
+// How many pages we can allocate
+const MAX_PAGES: usize = 16;
+
+// Memory pool for pages
+static mut PAGE_POOL: [u8; MAX_PAGES * PAGE_SIZE] = [0; MAX_PAGES * PAGE_SIZE];
+static mut PAGE_POOL_USED: usize = 0;
 
 // Slab allocator struct.
 pub struct SlabAllocator {
@@ -35,7 +45,7 @@ type Page = PageHeader;
 
 impl SlabAllocator {
     pub fn new(object_size: usize) -> Self {
-        // Make sure objects are at least pointer-sized
+        // Make sure objects are at least pointer-sized (needed for free list)
         let object_size = object_size.max(core::mem::size_of::<*mut FreeObject>());
         
         // Align to pointer size
