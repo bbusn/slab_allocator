@@ -55,7 +55,12 @@ impl SlabAllocator {
             & !(core::mem::align_of::<*mut FreeObject>() - 1);
 
         // Count how many objects fit in one page
-        let usable_space = PAGE_SIZE - core::mem::size_of::<PageHeader>();
+        // Account for page header and alignment padding
+        let header_size = core::mem::size_of::<PageHeader>();
+        let object_align = core::mem::align_of::<FreeObject>();
+        let data_start_raw = header_size;
+        let aligned_start = (data_start_raw + object_align - 1) & !(object_align - 1);
+        let usable_space = PAGE_SIZE - aligned_start;
         let objects_per_page = usable_space / object_size;
 
         Self {
@@ -126,13 +131,20 @@ impl SlabAllocator {
             ptr::write(page_ptr, Page { next: self.pages });
         }
 
-        // The data area starts after the header
-        // SAFETY: Adding header size stays within the page bounds.
-        let data_start = unsafe { (page_ptr as *mut u8).add(core::mem::size_of::<PageHeader>()) };
+        // The data area starts after the header, aligned to object alignment
+        let header_size = core::mem::size_of::<PageHeader>();
+        let object_align = core::mem::align_of::<FreeObject>();
+        let data_start_raw = unsafe { (page_ptr as *mut u8).add(header_size) };
+        // Align data_start to object alignment requirement
+        let data_start_addr = data_start_raw as usize;
+        let aligned_addr = (data_start_addr + object_align - 1) & !(object_align - 1);
+        let data_start = aligned_addr as *mut u8;
+        
+        // SAFETY: data_start is aligned and within page bounds, and object_size accounts for alignment.
         for i in 0..self.objects_per_page {
-            // SAFETY: i * object_size is bounded by objects_per_page calculation.
+            // SAFETY: i * object_size is bounded by objects_per_page calculation, and data_start is aligned.
             let obj_ptr = unsafe { data_start.add(i * self.object_size) } as *mut FreeObject;
-            // SAFETY: obj_ptr points to valid memory within the page we just allocated.
+            // SAFETY: obj_ptr is properly aligned and points to valid memory within the page we just allocated.
             unsafe {
                 (*obj_ptr).next = self.free_list;
             }
