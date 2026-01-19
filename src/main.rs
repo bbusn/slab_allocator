@@ -33,6 +33,24 @@ struct PageHeader {
 // A page is a header followed by the actual data
 type Page = PageHeader;
 
+impl SlabAllocator {
+    pub fn new(object_size: usize) -> Self {
+        // Make sure objects are at least pointer-sized
+        let object_size = object_size.max(core::mem::size_of::<*mut FreeObject>());
+        
+        // Align to pointer size
+        let object_size = (object_size + core::mem::align_of::<*mut FreeObject>() - 1)
+            & !(core::mem::align_of::<*mut FreeObject>() - 1);
+
+        Self {
+            object_size,
+            objects_per_page: 0,
+            free_list: core::ptr::null_mut(),
+            pages: core::ptr::null_mut(),
+        }
+    }
+}
+
 // SAFETY: This function is required by the C runtime ABI.
 // It is not meant to be called directly; it exists only so the linker can resolve the symbol.
 #[cfg(not(test))]
