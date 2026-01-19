@@ -11,6 +11,7 @@ use core::panic::PanicInfo;
 
 use crate::sys::exit;
 use core::ptr;
+use core::ptr::NonNull;
 
 const PAGE_SIZE: usize = 4096;
 
@@ -57,6 +58,16 @@ impl SlabAllocator {
             objects_per_page: 0,
             free_list: core::ptr::null_mut(),
             pages: core::ptr::null_mut(),
+        }
+    }
+
+    pub fn alloc(&mut self) -> Option<NonNull<u8>> {
+        unsafe {
+            // Pop from free list
+            let obj = self.free_list;
+            self.free_list = (*obj).next;
+            
+            Some(NonNull::new_unchecked(obj as *mut u8))
         }
     }
 }
