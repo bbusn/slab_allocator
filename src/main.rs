@@ -67,6 +67,7 @@ impl SlabAllocator {
     }
 
     pub fn alloc(&mut self) -> Option<NonNull<u8>> {
+        // SAFETY: free_list is non-null after allocate_page, and points to valid memory from our pool.
         unsafe {
             // If free list is empty, allocate a new page
             if self.free_list.is_null() {
@@ -83,6 +84,7 @@ impl SlabAllocator {
 
     /// Free an object, returning it to the free list.
     pub fn free(&mut self, ptr: NonNull<u8>) {
+        // SAFETY: ptr is validated to be within our pool before dereferencing.
         unsafe {
             let pool_start = addr_of_mut!(PAGE_POOL) as *const u8 as usize;
             let pool_end = pool_start + MAX_PAGES * PAGE_SIZE;
@@ -102,6 +104,7 @@ impl SlabAllocator {
 
     unsafe fn allocate_page(&mut self) -> Option<()> {
         // Check if we have space for another page
+        // SAFETY: Reading mutable static is safe because we're the only allocator.
         unsafe {
             if PAGE_POOL_USED + PAGE_SIZE > MAX_PAGES * PAGE_SIZE {
                 return None;
@@ -110,14 +113,17 @@ impl SlabAllocator {
 
         // Get the next page from the pool
         let pool_start = addr_of_mut!(PAGE_POOL) as *mut u8;
+        // SAFETY: PAGE_POOL_USED is within bounds, and add stays within PAGE_POOL array.
         let page_ptr = unsafe {
             pool_start.add(PAGE_POOL_USED)
         } as *mut Page;
+        // SAFETY: Writing to mutable static is safe because we're the only allocator.
         unsafe {
             PAGE_POOL_USED += PAGE_SIZE;
         }
 
         // Write the page header
+        // SAFETY: page_ptr points to valid memory within PAGE_POOL that we just allocated.
         unsafe {
             ptr::write(page_ptr, Page {
                 next: self.pages,
@@ -125,13 +131,16 @@ impl SlabAllocator {
         }
 
         // The data area starts after the header
+        // SAFETY: Adding header size stays within the page bounds.
         let data_start = unsafe {
             (page_ptr as *mut u8).add(core::mem::size_of::<PageHeader>())
         };
         for i in 0..self.objects_per_page {
+            // SAFETY: i * object_size is bounded by objects_per_page calculation.
             let obj_ptr = unsafe {
                 data_start.add(i * self.object_size)
             } as *mut FreeObject;
+            // SAFETY: obj_ptr points to valid memory within the page we just allocated.
             unsafe {
                 (*obj_ptr).next = self.free_list;
             }
