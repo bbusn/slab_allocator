@@ -149,6 +149,19 @@ pub extern "C" fn abort() {
 // It is marked `no_mangle` so the linker can find it.
 #[no_mangle]
 pub extern "C" fn main() {
+    let mut slab = SlabAllocator::new(64);
+
+    let obj1 = slab.alloc();
+    let obj2 = slab.alloc();
+    let obj3 = slab.alloc();
+
+    if let Some(ptr) = obj1 { slab.free(ptr); }
+    if let Some(ptr) = obj2 { slab.free(ptr); }
+    if let Some(ptr) = obj3 { slab.free(ptr); }
+
+    let _obj4 = slab.alloc();
+    let _obj5 = slab.alloc();
+
     exit(0);
 }
 
