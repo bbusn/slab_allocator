@@ -206,47 +206,59 @@ pub extern "C" fn rust_eh_personality() {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::vec::Vec;
+    use core::ptr::NonNull;
 
     fn reset_state() {
         SlabAllocator::reset_pool();
     }
 
     #[test]
-    fn test_write_to_allocated_memory() {
+    fn test_free_outside_pool() {
         reset_state();
         let mut slab = SlabAllocator::new(64);
         
-        let ptr = slab.alloc().unwrap();
-        unsafe {
-            // Write some data to the allocated memory
-            let slice = std::slice::from_raw_parts_mut(ptr.as_ptr(), 64);
-            for (i, byte) in slice.iter_mut().enumerate() {
-                *byte = (i % 256) as u8;
-            }
-            
-            // Verify the data
-            for (i, byte) in slice.iter().enumerate() {
-                assert_eq!(*byte, (i % 256) as u8);
-            }
+        // Create a fake pointer outside the pool
+        let fake_ptr = NonNull::new(0xdeadbeef as *mut u8).unwrap();
+        
+        // Should not crash, just ignore
+        slab.free(fake_ptr);
+        
+        // Allocator should still work
+        let ptr = slab.alloc();
+        assert!(ptr.is_some());
+    }
+
+    #[test]
+    fn test_alloc_after_free() {
+        reset_state();
+        let mut slab = SlabAllocator::new(64);
+        
+        let mut ptrs = Vec::new();
+        
+        // Allocate several objects
+        for _ in 0..10 {
+            ptrs.push(slab.alloc().unwrap());
         }
+        
+        // Free all of them
+        for ptr in ptrs {
+            slab.free(ptr);
+        }
+        
+        // Allocate again - should reuse freed memory
+        let new_ptrs: Vec<_> = (0..10).map(|_| slab.alloc().unwrap()).collect();
+        assert_eq!(new_ptrs.len(), 10);
     }
 
     #[test]
-    fn test_small_object_size() {
+    fn test_object_size_alignment() {
         reset_state();
-        let mut slab = SlabAllocator::new(8);
+        // Test that object size is properly aligned
+        let slab = SlabAllocator::new(13); // Not aligned to pointer size
         
-        // Should still work even with small objects
-        let ptr = slab.alloc();
-        assert!(ptr.is_some());
-    }
-
-    #[test]
-    fn test_large_object_size() {
-        reset_state();
-        let mut slab = SlabAllocator::new(1024);
-        
-        let ptr = slab.alloc();
-        assert!(ptr.is_some());
+        // object_size should be rounded up to at least pointer size
+        assert!(slab.object_size >= core::mem::size_of::<*mut FreeObject>());
+        assert_eq!(slab.object_size % core::mem::align_of::<*mut FreeObject>(), 0);
     }
 }
