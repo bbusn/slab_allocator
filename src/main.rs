@@ -54,9 +54,13 @@ impl SlabAllocator {
         let object_size = (object_size + core::mem::align_of::<*mut FreeObject>() - 1)
             & !(core::mem::align_of::<*mut FreeObject>() - 1);
 
+        // Count how many objects fit in one page
+        let usable_space = PAGE_SIZE - core::mem::size_of::<Page>();
+        let objects_per_page = usable_space / object_size;
+        
         Self {
             object_size,
-            objects_per_page: 0,
+            objects_per_page,
             free_list: core::ptr::null_mut(),
             pages: core::ptr::null_mut(),
         }
@@ -111,6 +115,14 @@ impl SlabAllocator {
         ptr::write(page_ptr, Page {
             next: self.pages,
         });
+
+        // The data area starts after the header
+        let data_start = (page_ptr as *mut u8).add(core::mem::size_of::<Page>());
+        for i in 0..self.objects_per_page {
+            let obj_ptr = data_start.add(i * self.object_size) as *mut FreeObject;
+            (*obj_ptr).next = self.free_list;
+            self.free_list = obj_ptr;
+        }
 
         self.pages = page_ptr;
         Some(())
