@@ -142,6 +142,12 @@ impl SlabAllocator {
         self.pages = page_ptr;
         Some(())
     }
+    // SAFETY: Resetting the pool is safe because we're the only allocator.
+    pub fn reset_pool() {
+        unsafe {
+            PAGE_POOL_USED = 0;
+        }
+    }
 }
 
 // SAFETY: This function is required by the C runtime ABI.
