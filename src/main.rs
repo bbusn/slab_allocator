@@ -12,6 +12,7 @@ use core::panic::PanicInfo;
 use crate::sys::exit;
 use core::ptr;
 use core::ptr::NonNull;
+use core::ptr::addr_of_mut;
 
 const PAGE_SIZE: usize = 4096;
 
@@ -63,12 +64,37 @@ impl SlabAllocator {
 
     pub fn alloc(&mut self) -> Option<NonNull<u8>> {
         unsafe {
+            // If free list is empty, allocate a new page
+            if self.free_list.is_null() {
+                self.allocate_page()?;
+            }
+
             // Pop from free list
             let obj = self.free_list;
             self.free_list = (*obj).next;
             
             Some(NonNull::new_unchecked(obj as *mut u8))
         }
+    }
+
+    unsafe fn allocate_page(&mut self) -> Option<()> {
+        // Check if we have space for another page
+        if PAGE_POOL_USED + PAGE_SIZE > MAX_PAGES * PAGE_SIZE {
+            return None;
+        }
+
+        // Get the next page from the pool
+        let pool_start = addr_of_mut!(PAGE_POOL) as *mut u8;
+        let page_ptr = pool_start.add(PAGE_POOL_USED) as *mut Page;
+        PAGE_POOL_USED += PAGE_SIZE;
+
+        // Write the page header
+        ptr::write(page_ptr, Page {
+            next: self.pages,
+        });
+
+        self.pages = page_ptr;
+        Some(())
     }
 }
 
